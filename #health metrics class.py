@@ -1,29 +1,38 @@
 #health metrics class
+
 import requests
 import json
-// add documentation
+import logging
+
 class FitBitAPIClient:
-    def __init__(self, base_url, user_id, access_token, headers):
+    def __init__(self, access_token, user_id='5FR3J5'):
         self.base_url = 'https://api.fitbit.com'
-        self.user_id = '5FR3J5'
-        self.access_token='eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIyM1BRREgiLCJzdWIiOiI1RlIzSjUiLCJpc3MiOiJGaXRiaXQiLCJ0eXAiOiJhY2Nlc3NfdG9rZW4iLCJzY29wZXMiOiJyc29jIHJzZXQgcm94eSBybnV0IHJwcm8gcnNsZSByYWN0IHJsb2MgcnJlcyByd2VpIHJociBydGVtIiwiZXhwIjoxNzU1NTQ4MjMzLCJpYXQiOjE3MjQwMTIyMzN9.uH7tJ-m78eftEz0nMJBsCqKc7IVQMhk2GFSX5wgQQhk'
-        self.headers =  {"Authorization": "Bearer {}".format(access_token)}
+        self.user_id = user_id
+        self.access_token = access_token
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
 
-
-    def fetch_sleep_data(start_date, end_date):
+    def fetch_sleep_data(self, start_date, end_date):
         url = f"{self.base_url}/1.2/user/{self.user_id}/sleep/date/{start_date}/{end_date}.json"
         response = requests.get(url, headers=self.headers)
         if response.status_code == 200:
-            return 
+            return response.json()
         else:
-            return json.text()
+            logging.error(f"Failed to fetch sleep data: {response.text}")
+            return None
+
+    def fetch_calorie_expenditure_data(self, start_date, end_date):
+        url = f"{self.base_url}/1.2/user/{self.user_id}/activities/calories/date/{start_date}/{end_date}.json"
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logging.error(f"Failed to fetch calorie data: {response.text}")
+            return None
         
-    def fetch_calorie_expediture_data(start_date, end_date):
-        url = f"{self.base_url}/1.2/user/{self.user_id}/sleep/date/{start_date}/{end_date}.json"
-        response = requests.get(url=url, headers=headers)
-
-
+        
 class DataBaseManager:
+
+
 
 class DataProcessor:
 
