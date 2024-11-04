@@ -13,7 +13,7 @@ class FitBitAPIClient:
     def __init__(self, access_token, user_id='5FR3J5'):
         self.base_url = 'https://api.fitbit.com'
         self.user_id = user_id
-        self.access_token = access_token
+        self.access_token = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIyM1BRREgiLCJzdWIiOiI1RlIzSjUiLCJpc3MiOiJGaXRiaXQiLCJ0eXAiOiJhY2Nlc3NfdG9rZW4iLCJzY29wZXMiOiJyc29jIHJzZXQgcm94eSBybnV0IHJwcm8gcnNsZSByYWN0IHJsb2MgcnJlcyByd2VpIHJociBydGVtIiwiZXhwIjoxNzU1NTQ4MjMzLCJpYXQiOjE3MjQwMTIyMzN9.uH7tJ-m78eftEz0nMJBsCqKc7IVQMhk2GFSX5wgQQhk'
         self.headers = {"Authorization": f"Bearer {self.access_token}"}
 
     #method for fetching sleep data from watch
@@ -42,8 +42,7 @@ class HealthMetrics:
     def __init__(self, fitbit_api_client, db_connection_string):
         self.fitbit_api_client = fitbit_api_client
         self.db_connection_string = db_connection_string
-        self.db_manager = DatabaseManager(db_connection_string)  # Initialize the database manager
-        # Initialize an empty DataFrame for daily metrics
+        self.db_manager = DatabaseManager(db_connection_string) 
         self.df = pd.DataFrame(columns=['date', 'weight', 'calorie_intake', 'fasting_hours', 'calorie_expenditure', 'sleep_hours'])
 
     def update_daily_metrics(self, date, weight=None, calorie_intake=None, fasting_hours=None, calorie_expenditure=None, sleep_hours=None):
@@ -56,22 +55,22 @@ class HealthMetrics:
             "sleep_hours": sleep_hours
         }
 
-        # Append new data to DataFrame
+        
         self.df = self.df.append(new_data, ignore_index=True)
 
-        # Drop duplicate rows, keeping the most recent one based on 'date'
+        
         self.df.drop_duplicates(subset=['date'], keep='last', inplace=True)
 
     def fetch_and_update_metrics(self, date):
-        # Fetch sleep and calorie data from Fitbit API for the given date
+        
         sleep_data = self.fitbit_api_client.fetch_sleep_data(date, date)
         calorie_data = self.fitbit_api_client.fetch_calorie_expenditure_data(date, date)
 
-        # Extract relevant data from API responses
+       
         sleep_hours = sleep_data.get('summary', {}).get('totalMinutesAsleep', 0) / 60 if sleep_data else None
         calories_burned = calorie_data.get('activities-calories', [{}])[0].get('value', None) if calorie_data else None
 
-        # Update metrics with Fitbit data
+    
         self.update_daily_metrics(date=date, calorie_expenditure=calories_burned, sleep_hours=sleep_hours)
 
     def save_to_postgres(self):
@@ -86,38 +85,24 @@ class HealthMetrics:
         self.df = pd.DataFrame(columns=['date', 'weight', 'calorie_intake', 'fasting_hours', 'calorie_expenditure', 'sleep_hours'])
 
     def fetch_and_modify_data_for_date(self, date):
-        """
-        Fetch data from PostgreSQL for a given date and allow modification.
-        """
-        # Fetch data using DatabaseManager
+       
         data = self.db_manager.fetch_data_by_date(date)
         if data:
-            # Display the data to the user (in real application, UI should handle this)
+           
             print(f"Data for {date}: {data}")
             
-            # Example modification (can be extended to get user input for each field)
+           
             weight = float(input(f"Enter new weight for {date} (current: {data['weight']}): ") or data['weight'])
             calorie_intake = float(input(f"Enter new calorie intake for {date} (current: {data['calorie_intake']}): ") or data['calorie_intake'])
             fasting_hours = float(input(f"Enter new fasting hours for {date} (current: {data['fasting_hours']}): ") or data['fasting_hours'])
             calorie_expenditure = float(input(f"Enter new calorie expenditure for {date} (current: {data['calorie_expenditure']}): ") or data['calorie_expenditure'])
             sleep_hours = float(input(f"Enter new sleep hours for {date} (current: {data['sleep_hours']}): ") or data['sleep_hours'])
             
-            # Update data in PostgreSQL
+           
             self.db_manager.update_data_by_date(date, weight, calorie_intake, fasting_hours, calorie_expenditure, sleep_hours)
 
 
     
-        
-        
-        
-"""class Scheduler:
-    def __init__(self, api_client):
-        self.scheduler = BackgroundScheduler()
-        self.api_client = api_client
-        
-    def start (self):
-         self.scheduler.add_job(self.api_client.fetch_sleep_data, 'cron', hour=0)
-         self.schedule.add_job(self.api_client.fetch_calorie_expenditure_data, 'cron', hour=0)"""
          
 class Scheduler:
     def __init__(self, health_metrics):
@@ -125,9 +110,9 @@ class Scheduler:
         self.scheduler = BackgroundScheduler()
 
     def start(self):
-        # Schedule the job to run daily to update data and save at the end of the day
-        self.scheduler.add_job(self.fetch_and_store_fitbit_data, 'cron', hour=0)  # Runs at midnight every day
-        self.scheduler.add_job(self.save_daily_data, 'cron', hour=23, minute=59)  # Runs at the end of the day
+        
+        self.scheduler.add_job(self.fetch_and_store_fitbit_data, 'cron', hour=0)  
+        self.scheduler.add_job(self.save_daily_data, 'cron', hour=23, minute=59)  # 
         self.scheduler.start()
 
     def fetch_and_store_fitbit_data(self):
@@ -136,26 +121,20 @@ class Scheduler:
         """
         today = datetime.datetime.now().date().isoformat()
 
-        # Fetch the data using HealthMetrics
+       
         self.health_metrics.fetch_and_update_metrics(date=today)
 
     def save_daily_data(self):
-        """
-        Save the daily DataFrame to PostgreSQL at the end of the day.
-        """
+      
         self.health_metrics.save_to_postgres()
-        # Clear the DataFrame for the next day's data collection
+
         self.health_metrics.reset_daily_dataframe()
 
     def shutdown(self):
-        """
-        Shutdown the scheduler safely.
-        """
-        self.scheduler.shutdown()
-        print("Scheduler has been shut down.")
        
-         
-                 
+        self.scheduler.shutdown()
+       
+               
 class DatabaseManager:
     def __init__(self, db_connection_string):
         self.conn = psycopg2.connect(db_connection_string)
@@ -216,16 +195,3 @@ class DataProcessor:
          
 class ETLController:
     pass
-
-"""class HealthMetrics:
-    def __init__(self, date, calorie_intake, calorie_expenditure, weight, sleep, fasting_hours, calorie_goal, sleep_goal):
-        self.date = date
-        self.calorie_intake = calorie_intake
-        self.calorie_expenditure = calorie_expenditure
-        self.weight = weight
-        self.sleep = sleep
-        self.fasting_hours = fasting_hours
-        self.calorie_goal = calorie_goal
-        self.sleep_goal = sleep_goal"""
-
-    

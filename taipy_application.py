@@ -24,6 +24,22 @@ page = """
 
 <|layout|columns=1|gap=10px|
 <|
+<|card|
+<center><h2 style="color:#87CEEB;">Enter Your Health Data</h2></center>
+<|layout|columns=2|gap=5px|
+<|input|type=date|bind=entry_date|label=Date:|>
+<|input|type=number|bind=weight|label=Weight (kg):|step=0.1|>
+<|input|type=number|bind=calorie_intake|label=Calorie Intake (kcal):|>
+<|input|type=number|bind=fasting_hours|label=Fasting Hours:|>
+<|button|label=Submit Data|on_action=submit_health_data|>
+|>
+|>
+
+
+
+#GRAPHS
+<|layout|columns=1|gap=10px|
+<|
 <center><h2 style="color:#87CEEB;">Weight Over Time</h2></center>
 <|{df}|chart|type=line|x=date|y=weight|color=#4682B4|title="Weight Tracking"|>
 |>
