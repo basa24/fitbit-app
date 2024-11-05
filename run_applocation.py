@@ -81,8 +81,6 @@ class DatabaseManager:
         
 db_manager = DatabaseManager()
 db_manager.create_table()
-df_fetcheddata = db_manager.fetch_data()
-
 
 def submit_data(state):
     try:
@@ -112,7 +110,13 @@ def submit_data(state):
 
     except Exception as e:
         print(f"An error occurred: {e}")
+        
+def refresh_graphs(state):
+    # Assume db_manager.fetch_data() fetches the updated dataset
+    state.df_fetcheddata = db_manager.fetch_data()
+    notify(state, "df_fetcheddata")  # Notify Taipy to update the UI components that use df_fetcheddata
 
+df_fetcheddata = db_manager.fetch_data()
 page = """
 <center><h1 style="color:#ADD8E6;">Health Tracking Dashboard</h1></center>
 <|layout|columns=2|gap=20px|>
@@ -130,6 +134,7 @@ page = """
 <|{fasting_hours}|input|type=number|label=Enter Fasting Hours|>
 
 <|Submit|button|on_action=submit_data|class_name=button|>
+<|Refresh|button|on_action=refresh_graphs|class_name=button|>
 |>
 
 <|layout|columns=1|gap=10px|>
@@ -142,7 +147,6 @@ page = """
 <center><h2 style="color:#87CEEB;">Calorie Intake vs. Expenditure</h2></center>
 <|{df_fetcheddata}|chart|type=bar|x=date|y[1]=calorie_intake|y[2]=calorie_expenditure|color[1]=#6495ED|color[2]=#4169E1|title="Calorie Metrics"|>
 |>
-
 
 <|>
 <center><h2 style="color:#87CEEB;">Calorie Deficit Over Time</h2></center>
