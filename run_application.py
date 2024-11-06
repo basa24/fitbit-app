@@ -10,7 +10,7 @@ from taipy.gui import Gui, notify
 class DatabaseManager:
     def __init__(self, db_url="postgresql://postgres:Sarigama1@localhost:5432/postgres"):
         self.engine = create_engine(db_url)
-        self.metadata = MetaData()  # Initialize without the bind argument
+        self.metadata = MetaData()  
         self.metadata.bind = self.engine  # Bind the engine here
         
         self.health_metrics = Table(
