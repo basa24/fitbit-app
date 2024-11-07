@@ -40,42 +40,32 @@ class FitBitAPIClient:
     def get_fitbit_df(self, start_date, end_date):
         sleep_data = self.fetch_sleep_data(start_date, end_date)
         calorie_data = self.fetch_calorie_expenditure_data(start_date, end_date)
-
-        # Processing calorie data
         calorie_expenditure_list = []
         calorie_dates = []
         if calorie_data and 'activities-calories' in calorie_data:
             calorie_dict = {entry['dateTime']: int(entry['value']) for entry in calorie_data['activities-calories']}
             calorie_dates = list(calorie_dict.keys())
             calorie_expenditure_list = list(calorie_dict.values())
-
-        df_calories = pd.DataFrame({
+        df_manualextraction = pd.DataFrame({
             'date': calorie_dates,
             'calorie_expenditure': calorie_expenditure_list
         })
-        df_calories['date'] = pd.to_datetime(df_calories['date'])
-
-        # Processing sleep data
+        df_manualextraction['date'] = pd.to_datetime(df_manualextraction['date'])
         sleep_records = []
         if sleep_data and 'sleep' in sleep_data:
             for record in sleep_data['sleep']:
                 date = record['dateOfSleep']
                 sleep_minutes = record['minutesAsleep']
                 sleep_records.append({'date': date, 'sleep_minutes': sleep_minutes})
-
         df_sleep = pd.DataFrame(sleep_records)
         if not df_sleep.empty:
-            df_sleep['date'] = pd.to_datetime(df_sleep['date'])
+            df_sleep['date'] = pd.to_datetime(df_sleep['date'])  
             df_sleep = df_sleep.groupby('date', as_index=False).sum()
-            df_sleep['sleep_hours'] = round(df_sleep['sleep_minutes'] / 60, 2)
+            df_sleep['sleep_hours'] = round(df_sleep['sleep_minutes'] / 60, 2)  # Convert minutes to hours and round to 2 decimal places
             df_sleep = df_sleep[['date', 'sleep_hours']]
-
-        # Merging calorie and sleep data
-        df_merged = pd.merge(df_calories, df_sleep, on='date', how='left')
-        df_merged = df_merged.sort_values(by='date').reset_index(drop=True)
-
-        return df_merged
-        
+            df_manualextraction = pd.merge(df_manualextraction, df_sleep, on='date', how='left')
+        df_manualextraction = df_manualextraction.sort_values(by='date').reset_index(drop=True)
+        return df_manualextraction
     
     
 class DatabaseManager:
@@ -159,11 +149,13 @@ sleep_data = client.fetch_sleep_data(today_date, today_date)
 calorie_data = client.fetch_calorie_expenditure_data(today_date, today_date)
 
 df = client.get_fitbit_df(today_date, today_date)
+print(df)
 
 db = DatabaseManager()
 db.create_table()
-
 db.upsert_health_metrics(df, False)
+
+
 
 
 
