@@ -202,32 +202,31 @@ def refresh_graphs(state):
     notify(state, "df_fetcheddata")  # Notify Taipy to update the UI components that use df_fetcheddata
 df_fetcheddata = db_manager.fetch_data()
 
+""" rning: on_action(): 'submit_goals' is not a valid function.
+  _warn(f"on_action(): '{action}' is not a valid function.")"""
 def submit_goals(state):
-    if state.fasting_start_time is None or state.fasting_end_time is None:
-        fasting_duration = 0  # Set fasting hours to 0 if either time is None
-        start_time = None
-        end_time = None
-    else:
-        try:
-            start_time = datetime.strptime(state.fasting_start_time, "%H:%M").time()
-            end_time = datetime.strptime(state.fasting_end_time, "%H:%M").time()
-            start_dt = datetime.combine(datetime.today(), start_time)
-            end_dt = datetime.combine(datetime.today(), end_time)
-            fasting_duration = (end_dt - start_dt).total_seconds() / 3600
-            if fasting_duration < 0:
-                fasting_duration += 24
-        except ValueError:
-            print("Invalid time format. Please enter time as HH:MM.")
-            return None 
+    print("submit_goals called")  # Debug: Check if this line prints when you click the button
+    try:
+        start_time = datetime.strptime(state.fasting_start_time, "%H:%M").time()
+        end_time = datetime.strptime(state.fasting_end_time, "%H:%M").time()
+        start_dt = datetime.combine(datetime.today(), start_time)
+        end_dt = datetime.combine(datetime.today(), end_time)
+        fasting_duration = (end_dt - start_dt).total_seconds() / 3600
+        if fasting_duration < 0:
+            fasting_duration += 24
+    except ValueError as e:
+        print(f"Error parsing times: {e}")  # Debug: Check for any parsing errors
+        return None
+
     goals_data = {
-        'start_time': [start_time],
-        'end_time': [end_time],
-        'fasting_hours': [fasting_duration],
-        'sleep_hours': [state.sleep_goal],
-        'calorie_deficit': [state.calorie_deficit_goal]
+        'start_time': start_time,
+        'end_time': end_time,
+        'fasting_hours': fasting_duration,
+        'sleep_hours': state.sleep_goal,
+        'calorie_deficit': state.calorie_deficit_goal
     }
-    df = pd.DataFrame(goals_data)
-    print(df)  
+    df = pd.DataFrame([goals_data])  # Ensure data is wrapped in a list
+    print(df)
     goal_manager.update_health_goals(df)
     
 page = """
@@ -266,7 +265,7 @@ page = """
 <h3>Calorie Deficit Goal</h3>
 <|{calorie_deficit_goal}|slider|min=0|max=2000|step=50|value=500|label="Calorie Deficit Goal"|>
 
-<|Save Goals|button|on_action=submit_goals|class_name=button|>
+<|Save|button|on_action=submit_goals|class_name=button|>
 |>
 <|layout|columns=1|gap=10px|>
 <|>
@@ -293,6 +292,11 @@ page = """
 weight = 50.0
 calorie_intake = 2000
 fasting_hours = 16
+fasting_start_time = '18:00'
+fasting_end_time = '12:00'
+sleep_goal = 8
+calorie_deficit_goal = 500
+
 entry_date = datetime.date.today()
 df_entry = pd.DataFrame(columns=["date", "calorie_expenditure", "sleep_hours", "weight", "calorie_intake", "fasting_hours", "daily_lifescore"])
 gui = Gui(page=page)
@@ -307,6 +311,11 @@ if __name__ == "__main__":
             "entry_date": entry_date,
             "calorie_intake": calorie_intake,
             "fasting_hours": fasting_hours,
-            "df_entry": df_entry
+            "df_entry": df_entry,
+            "fasting_start_time": fasting_start_time,
+            "fasting_end_time":fasting_end_time,
+            "sleep_goal":sleep_goal,
+            "calorie_deficit_goal":calorie_deficit_goal
+            
         }
     )
