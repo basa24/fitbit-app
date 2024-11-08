@@ -1,4 +1,13 @@
-#The application to run
+
+# Third-party library imports
+import pandas as pd
+from sqlalchemy import (
+    create_engine, MetaData, Table, Column, Integer, Float, Date, Time, text, select, update
+)
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+from taipy.gui import Gui, notify  # For Taipy GUI components
 
 import datetime
 import pandas as pd
@@ -7,6 +16,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from taipy.gui import Gui, notify
 from sqlalchemy import update
+from sqlalchemy import create_engine, select, MetaData, Table, Column, Integer, Float, Time
+from sqlalchemy.orm import Session
+from sqlalchemy import select, insert
 
 class DatabaseManager:
     def __init__(self, db_url="postgresql://postgres:Sarigama1@localhost:5432/postgres"):
@@ -103,26 +115,51 @@ class GoalsManager:
             print("Table created successfully using SQLAlchemy")
         except Exception as e:
             print(f"An error occurred: {e}")
-            
-
-
+    """
     def update_health_goals(self, df):
+        def parse_time(time_str):
+            if isinstance(time_str, str):
+                return datetime.strptime(time_str, "%H:%M").time()
+            return time_str  # Already a datetime.time object
+
+        # Apply parsing to start_time and end_time columns
+        df['start_time'] = df['start_time'].apply(parse_time)
+        df['end_time'] = df['end_time'].apply(parse_time)
+        # Extract the first row for updating or inserting
         row = df.iloc[0]
+        
         with self.engine.connect() as connection:
-            stmt = (
-                update(self.health_metrics)
-                .values(
+            # Check if a row with id=1 exists
+            select_stmt = select(self.health_goals).where(self.health_goals.c.id == 1)
+            result = connection.execute(select_stmt).fetchone()
+            
+            if result:  # Row exists, perform update
+                stmt = (
+                    update(self.health_goals)
+                    .values(
+                        start_time=row['start_time'],
+                        end_time=row['end_time'],
+                        fasting_hours=int(row['fasting_hours']),
+                        sleep_hours=float(row['sleep_hours']),
+                        calorie_deficit=int(row['calorie_deficit'])
+                    )
+                    .where(self.health_goals.c.id == 1)
+                )
+                connection.execute(stmt)
+            else:  # Row does not exist, perform insert
+                stmt = insert(self.health_goals).values(
+                    id=1,  # Setting id=1 explicitly
                     start_time=row['start_time'],
                     end_time=row['end_time'],
-                    fasting_hours=row['fasting_hours'],
-                    sleep_hours=row['sleep_hours'],
-                    calorie_deficit=row['calorie_deficit']
+                    fasting_hours=int(row['fasting_hours']),
+                    sleep_hours=float(row['sleep_hours']),
+                    calorie_deficit=int(row['calorie_deficit'])
                 )
-                .where(self.health_metrics.c.id == 1)  
-            )   
-            connection.execute(stmt)
+                connection.execute(stmt)
             connection.commit()
-            
+            """
+    
+
             
     def calculate_fasting_score(self, hours_fasted, fasting_goal):
         if fasting_goal == 0:
@@ -178,7 +215,7 @@ def submit_data(state):
 
             calorie_expenditure, sleep_hours = (result if result else (None, None))
 
-            # Create a new row and overwrite the DataFrame
+            
             new_entry = pd.DataFrame([{
                 'date': state.entry_date,
                 'calorie_expenditure': calorie_expenditure,
@@ -197,15 +234,14 @@ def submit_data(state):
         print(f"An error occurred: {e}")
         
 def refresh_graphs(state):
-    # Assume db_manager.fetch_data() fetches the updated dataset
     state.df_fetcheddata = db_manager.fetch_data()
-    notify(state, "df_fetcheddata")  # Notify Taipy to update the UI components that use df_fetcheddata
+    
+    
 df_fetcheddata = db_manager.fetch_data()
 
-""" rning: on_action(): 'submit_goals' is not a valid function.
-  _warn(f"on_action(): '{action}' is not a valid function.")"""
-def submit_goals(state):
-    print("submit_goals called")  # Debug: Check if this line prints when you click the button
+def save_goals(state):
+    print("save_goals called") 
+    """
     try:
         start_time = datetime.strptime(state.fasting_start_time, "%H:%M").time()
         end_time = datetime.strptime(state.fasting_end_time, "%H:%M").time()
@@ -215,19 +251,21 @@ def submit_goals(state):
         if fasting_duration < 0:
             fasting_duration += 24
     except ValueError as e:
-        print(f"Error parsing times: {e}")  # Debug: Check for any parsing errors
-        return None
-
-    goals_data = {
-        'start_time': start_time,
-        'end_time': end_time,
-        'fasting_hours': fasting_duration,
-        'sleep_hours': state.sleep_goal,
-        'calorie_deficit': state.calorie_deficit_goal
-    }
-    df = pd.DataFrame([goals_data])  # Ensure data is wrapped in a list
-    print(df)
-    goal_manager.update_health_goals(df)
+        print(f"Error parsing times: {e}")  
+        
+    """
+    start_time = datetime.strptime(state.fasting_start_time, "%H:%M").time() 
+    end_time = datetime.strptime(state.fasting_end_time, "%H:%M").time()
+    goals_data = pd.DataFrame([{
+            'start_time': state.fasting_start_time,
+            'end_time': state.fasting_end_time,
+            'fasting_hours': None,
+            'sleep_hours': state.sleep_goal,
+            'calorie_deficit': state.calorie_deficit_goal
+        }])
+    print(goals_data)
+    
+    goal_manager.update_health_goals(goals_data)
     
 page = """
 <center><h1 style="color:#ADD8E6;">Health Tracking Dashboard</h1></center>
@@ -254,19 +292,20 @@ page = """
 <center><h2 style="color:#87CEEB;">Goals Manager</h2></center>
 
 <h3>Fasting Start Time</h3>
-<|{fasting_start_time}|input|type=text|placeholder="HH:MM"|label="Fasting Start Time (24-hour)"|>
+<|{start_time}|input|type=text|placeholder="HH:MM"|label=Enter start time (HH:MM)|>
 
 <h3>Fasting End Time</h3>
-<|{fasting_end_time}|input|type=text|placeholder="HH:MM"|label="Fasting End Time (24-hour)"|>
+<|{end_time}|input|type=text|placeholder="HH:MM"|label=Enter end time (HH:MM)|>
 
-<h3>Sleep Hours Goal</h3>
-<|{sleep_goal}|slider|min=6|max=16|step=1|value=8|label="Sleep Hours Goal"|>
+<h3>Sleep Goal</h3>
+<|{sleep_goal}|input|type=number|label=Enter sleep goal (hours)|>
 
 <h3>Calorie Deficit Goal</h3>
-<|{calorie_deficit_goal}|slider|min=0|max=2000|step=50|value=500|label="Calorie Deficit Goal"|>
+<|{calorie_deficit_goal}|input|type=number|label=Enter calorie deficit goal (kcal)|>
 
-<|Save|button|on_action=submit_goals|class_name=button|>
+<|Save|button|on_action=save_goals|class_name=button|>
 |>
+
 <|layout|columns=1|gap=10px|>
 <|>
 <center><h2 style="color:#87CEEB;">Weight Over Time</h2></center>
@@ -292,13 +331,14 @@ page = """
 weight = 50.0
 calorie_intake = 2000
 fasting_hours = 16
-fasting_start_time = '18:00'
-fasting_end_time = '12:00'
-sleep_goal = 8
-calorie_deficit_goal = 500
-
+start_time = ""
+end_time = ""
+sleep_goal = ""
+calorie_deficit_goal = ""
+from datetime import date
 entry_date = datetime.date.today()
 df_entry = pd.DataFrame(columns=["date", "calorie_expenditure", "sleep_hours", "weight", "calorie_intake", "fasting_hours", "daily_lifescore"])
+df_goals = pd.DataFrame(columns=["fasting_start_time", "fasting_end_time", "sleep_goal", "calorie_deficit_goal"])
 gui = Gui(page=page)
 
 if __name__ == "__main__":
@@ -312,10 +352,11 @@ if __name__ == "__main__":
             "calorie_intake": calorie_intake,
             "fasting_hours": fasting_hours,
             "df_entry": df_entry,
-            "fasting_start_time": fasting_start_time,
-            "fasting_end_time":fasting_end_time,
+            "fasting_start_time": start_time,
+            "fasting_end_time":end_time,
             "sleep_goal":sleep_goal,
-            "calorie_deficit_goal":calorie_deficit_goal
+            "calorie_deficit_goal":calorie_deficit_goal,
+            "df_goals": df_goals
             
         }
     )
