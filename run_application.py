@@ -1,4 +1,9 @@
-
+"""INCLUDE GETTER METHODS FOR DB MANAG ER AND GOAL MANAGER: 
+CALCULTAE DAILY LIFE SCORE IN SUBMIT METHOD AND ADD TO HEALTH_METRICS
+WHEN APPLICTSION IS RUNNING; THE BACKRGOUDN API_TO_DB CANNOT XCECUTE:
+AUTOMATICALLY QUIT APPLICATION
+CLOSE CONN WHEN DONE
+"""
 # Third-party library imports
 import pandas as pd
 from sqlalchemy import (
@@ -95,6 +100,8 @@ class DatabaseManager:
 #GoalsManager
 
 
+
+
 class GoalsManager:
     def __init__(self, db_url="postgresql://postgres:Sarigama1@localhost:5432/postgres"):
         self.engine = create_engine(db_url)
@@ -119,58 +126,47 @@ class GoalsManager:
     
     def update_health_goals(self, df):
         def parse_time(time_str):
-            if isinstance(time_str, str):
-                return datetime.strptime(time_str, "%H:%M").time()
-            return time_str  # Already a datetime.time object
+            return datetime.strptime(time_str, "%H:%M").time() if isinstance(time_str, str) else time_str
 
         # Apply parsing to start_time and end_time columns
         df['start_time'] = df['start_time'].apply(parse_time)
         df['end_time'] = df['end_time'].apply(parse_time)
+
         # Extract the first row for updating or inserting
         row = df.iloc[0]
-        
+
         with self.engine.connect() as connection:
             # Check if a row with id=1 exists
             select_stmt = select(self.health_goals).where(self.health_goals.c.id == 1)
             result = connection.execute(select_stmt).fetchone()
-            
+
+            values = {
+                'start_time': row['start_time'],
+                'end_time': row['end_time'],
+                'fasting_hours': int(row['fasting_hours']) if row['fasting_hours'] is not None else None,
+                'sleep_hours': float(row['sleep_hours']) if row['sleep_hours'] is not None else None,
+                'calorie_deficit': int(row['calorie_deficit']) if row['calorie_deficit'] is not None else None
+            }
+
             if result:  # Row exists, perform update
-                stmt = (
-                    update(self.health_goals)
-                    .values(
-                        start_time=row['start_time'],
-                        end_time=row['end_time'],
-                        fasting_hours=int(row['fasting_hours']),
-                        sleep_hours=float(row['sleep_hours']),
-                        calorie_deficit=int(row['calorie_deficit'])
-                    )
-                    .where(self.health_goals.c.id == 1)
-                )
+                stmt = update(self.health_goals).values(**values).where(self.health_goals.c.id == 1)
                 connection.execute(stmt)
             else:  # Row does not exist, perform insert
-                stmt = insert(self.health_goals).values(
-                    id=1,  # Setting id=1 explicitly
-                    start_time=row['start_time'],
-                    end_time=row['end_time'],
-                    fasting_hours=int(row['fasting_hours']),
-                    sleep_hours=float(row['sleep_hours']),
-                    calorie_deficit=int(row['calorie_deficit'])
-                )
+                stmt = insert(self.health_goals).values(id=1, **values)  # Setting id=1 explicitly
                 connection.execute(stmt)
             connection.commit()
-            
-    
+            print("Goals updated successfully")
 
-            
+                
     def calculate_fasting_score(self, hours_fasted, fasting_goal):
-        if fasting_goal == 0:
+        if fasting_goal == 0 or None:
             return None  
         else:
             score = hours_fasted / fasting_goal
             return min(score, 1)  # Cap the score at 1 (or 100%)
     
     def calculate_calorie_deficit_score(self, actual_deficit, deficit_goal):
-        if deficit_goal == 0:
+        if deficit_goal == 0 or None:
             return None 
         elif actual_deficit <= 0:
             return 0  # Score is 0 if there's a calorie surplus or no deficit
@@ -179,7 +175,7 @@ class GoalsManager:
             return min(score, 1)  # Cap the score at 1 (or 100%)
 
     def calculate_sleep_score(self, actual_sleep, sleep_goal):
-        if sleep_goal == 0:
+        if sleep_goal == 0 or None:
             return None  
         else:
             score = actual_sleep / sleep_goal
@@ -241,32 +237,46 @@ def refresh_graphs(state):
 df_fetcheddata = db_manager.fetch_data()
 
 def save_goals(state):
-    print("save_goals called") 
-    """
+    print("save_goals called")
     try:
-        start_time = datetime.strptime(state.fasting_start_time, "%H:%M").time()
-        end_time = datetime.strptime(state.fasting_end_time, "%H:%M").time()
-        start_dt = datetime.combine(datetime.today(), start_time)
-        end_dt = datetime.combine(datetime.today(), end_time)
-        fasting_duration = (end_dt - start_dt).total_seconds() / 3600
-        if fasting_duration < 0:
-            fasting_duration += 24
-    except ValueError as e:
-        print(f"Error parsing times: {e}")  
+        print("Start Time:", state.start_time)
+        print("End Time:", state.end_time)
+        print("Sleep Goal:", state.sleep_goal)
+        print("Calorie Deficit Goal:", state.calorie_deficit_goal)
+
+        # Using a safe conversion function for floats and ints that handles None values.
+        def safe_float(value):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        def safe_int(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
         
-    """
-    start_time = datetime.strptime(state.fasting_start_time, "%H:%M").time() 
-    end_time = datetime.strptime(state.fasting_end_time, "%H:%M").time()
-    goals_data = pd.DataFrame([{
-            'start_time': state.fasting_start_time,
-            'end_time': state.fasting_end_time,
+        
+        def safe_string(value):
+            try: 
+                return str(value)
+            except (TypeError, ValueError):
+                return None
+
+        goals_data = pd.DataFrame([{
+            'start_time': safe_string(state.start_time),
+            'end_time': safe_string(state.end_time),
             'fasting_hours': None,
-            'sleep_hours': state.sleep_goal,
-            'calorie_deficit': state.calorie_deficit_goal
+            'sleep_hours': safe_float(state.sleep_goal),
+            'calorie_deficit': safe_int(state.calorie_deficit_goal)
         }])
-    print(goals_data)
-    
-    goal_manager.update_health_goals(goals_data)
+        print("DataFrame:\n", goals_data)
+
+        goal_manager.update_health_goals(goals_data)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
     
 page = """
 <center><h1 style="color:#ADD8E6;">Health Tracking Dashboard</h1></center>
@@ -339,7 +349,7 @@ calorie_deficit_goal = ""
 from datetime import date
 entry_date = datetime.today().date()
 df_entry = pd.DataFrame(columns=["date", "calorie_expenditure", "sleep_hours", "weight", "calorie_intake", "fasting_hours", "daily_lifescore"])
-df_goals = pd.DataFrame(columns=["fasting_start_time", "fasting_end_time", "sleep_goal", "calorie_deficit_goal"])
+df_goals = pd.DataFrame(columns=["start_time", "end_time", "sleep_goal", "calorie_deficit_goal"])
 gui = Gui(page=page)
 
 if __name__ == "__main__":
@@ -353,8 +363,8 @@ if __name__ == "__main__":
             "calorie_intake": calorie_intake,
             "fasting_hours": fasting_hours,
             "df_entry": df_entry,
-            "fasting_start_time": start_time,
-            "fasting_end_time":end_time,
+            "start_time": start_time,
+            "end_time":end_time,
             "sleep_goal":sleep_goal,
             "calorie_deficit_goal":calorie_deficit_goal,
             "df_goals": df_goals
