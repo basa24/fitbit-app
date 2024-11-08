@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from taipy.gui import Gui, notify  # For Taipy GUI components
 
 import datetime
+from datetime import datetime
 import pandas as pd
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, Float, Date, Time, exc, text
 from sqlalchemy.dialects.postgresql import insert
@@ -115,7 +116,7 @@ class GoalsManager:
             print("Table created successfully using SQLAlchemy")
         except Exception as e:
             print(f"An error occurred: {e}")
-    """
+    
     def update_health_goals(self, df):
         def parse_time(time_str):
             if isinstance(time_str, str):
@@ -157,7 +158,7 @@ class GoalsManager:
                 )
                 connection.execute(stmt)
             connection.commit()
-            """
+            
     
 
             
@@ -336,7 +337,7 @@ end_time = ""
 sleep_goal = ""
 calorie_deficit_goal = ""
 from datetime import date
-entry_date = datetime.date.today()
+entry_date = datetime.today().date()
 df_entry = pd.DataFrame(columns=["date", "calorie_expenditure", "sleep_hours", "weight", "calorie_intake", "fasting_hours", "daily_lifescore"])
 df_goals = pd.DataFrame(columns=["fasting_start_time", "fasting_end_time", "sleep_goal", "calorie_deficit_goal"])
 gui = Gui(page=page)
