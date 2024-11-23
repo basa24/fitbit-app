@@ -7,7 +7,10 @@ import requests
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, Float, Date, exc, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
-
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, Float, Date, text
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
 
 class FitBitAPIClient:
     def __init__(self, access_token='eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIyM1BRREgiLCJzdWIiOiI1RlIzSjUiLCJpc3MiOiJGaXRiaXQiLCJ0eXAiOiJhY2Nlc3NfdG9rZW4iLCJzY29wZXMiOiJyc29jIHJzZXQgcm94eSBybnV0IHJwcm8gcnNsZSByYWN0IHJsb2MgcnJlcyByd2VpIHJociBydGVtIiwiZXhwIjoxNzU1NTQ4MjMzLCJpYXQiOjE3MjQwMTIyMzN9.uH7tJ-m78eftEz0nMJBsCqKc7IVQMhk2GFSX5wgQQhk'  # Replace with your actual access token
@@ -71,9 +74,11 @@ class FitBitAPIClient:
 class DatabaseManager:
     def __init__(self, db_url="postgresql://postgres:Sarigama1@localhost:5432/postgres"):
         self.engine = create_engine(db_url)
-        self.metadata = MetaData()  # Initialize without the bind argument
-        self.metadata.bind = self.engine  # Bind the engine here
+        self.metadata = MetaData()
+        self.metadata.bind = self.engine
+        self.Session = sessionmaker(bind=self.engine)  # Create a session factory
         
+        # Define the health_metrics table
         self.health_metrics = Table(
             'health_metrics', self.metadata,
             Column('date', Date, primary_key=True),
@@ -92,53 +97,64 @@ class DatabaseManager:
         except Exception as e:
             print(f"An error occurred: {e}")
             
-            
     def fetch_data(self):
+        # Use a session for executing queries
+        session = self.Session()
         try:
-            # Load the data from the 'health_metrics' table into a DataFrame, sorted by 'date' column
-            health_data = pd.read_sql('SELECT * FROM health_metrics ORDER BY date ASC', con=self.engine)
+            # Execute the SQL query to fetch data
+            query = text('SELECT * FROM health_metrics ORDER BY date ASC')
+            result = session.execute(query)
+            # Convert the result into a DataFrame
+            health_data = pd.DataFrame(result.fetchall(), columns=result.keys())
+            
             print("Data fetched successfully from the 'health_metrics' table.")
+            if not health_data.empty and 'date' in health_data.columns:
+                health_data['date'] = health_data['date'].apply(lambda x: x.strftime('%Y-%m-%d'))
+                health_data["calorie_deficit"] = (
+                    health_data["calorie_expenditure"].fillna(0) - health_data["calorie_intake"].fillna(0)
+                )
+            return health_data
         except Exception as e:
-            print(f"An error occurred while fetching data: {e}")    
-        if 'date' in health_data.columns:
-            health_data['date'] = health_data['date'].apply(lambda x: x.strftime('%Y-%m-%d')) 
-            health_data["calorie_deficit"] = health_data["calorie_expenditure"] - health_data["calorie_intake"]
-        return health_data
-    
+            print(f"An error occurred while fetching data: {e}")
+            return pd.DataFrame()  # Return an empty DataFrame on error
+        finally:
+            session.close()  # Always close the session
+            
     def upsert_health_metrics(self, df, is_manualentry):
-     
-        health_metrics = Table('health_metrics', self.metadata, autoload_with=self.engine)
-        record = df.to_dict(orient='records')[0]
-        with self.engine.connect() as conn:
+        session = self.Session()  # Open a session
+        try:
+            health_metrics = self.health_metrics
+            record = df.to_dict(orient='records')[0]  # Convert the DataFrame to a dictionary (first row)
+            
             stmt = insert(health_metrics).values(record)
-
+            
+            # Determine which fields to update
             if is_manualentry:
-                # Only update these fields if is_manualentry is True
                 upsert_fields = {
                     'weight': stmt.excluded.weight,
                     'calorie_intake': stmt.excluded.calorie_intake,
                     'fasting_hours': stmt.excluded.fasting_hours,
-                    'daily_lifescore': stmt.excluded.daily_lifescore
+                    'daily_lifescore': stmt.excluded.daily_lifescore,
                 }
             else:
-                # Only update these fields if is_manualentry is False
                 upsert_fields = {
                     'calorie_expenditure': stmt.excluded.calorie_expenditure,
-                    'sleep_hours': stmt.excluded.sleep_hours
+                    'sleep_hours': stmt.excluded.sleep_hours,
                 }
-
+            
             upsert_stmt = stmt.on_conflict_do_update(
-                index_elements=['date'],  # Assuming 'date' is a unique or primary key
+                index_elements=['date'],  # Conflict on 'date' column
                 set_=upsert_fields
             )
-            try:
-                conn.execute(upsert_stmt)
-                conn.commit()
-            except SQLAlchemyError as e:
-                print(f"An error occurred: {e}")
-                conn.rollback()
-
-        print("Data upserted successfully into 'health_metrics'.")     
+            
+            session.execute(upsert_stmt)
+            session.commit()  # Commit the transaction
+            print("Data upserted successfully into 'health_metrics'.")
+        except SQLAlchemyError as e:
+            session.rollback()  # Rollback in case of error
+            print(f"An error occurred during upsert: {e}")
+        finally:
+            session.close()  # Always close the session   
         
 client = FitBitAPIClient()
 
