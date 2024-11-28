@@ -298,8 +298,17 @@ goal_manager = GoalsManager()
 goal_manager.create_table()
 
 
-
 def submit_data(state):
+    # Normalize state values: Convert empty strings to None
+    def empty_to_none(value):
+        return value if value != '' else None
+
+    state.calorie_intake = empty_to_none(state.calorie_intake)
+    state.fasting_hours = empty_to_none(state.fasting_hours)
+    state.weight = empty_to_none(state.weight)
+    state.entry_date = empty_to_none(state.entry_date)
+
+    # Fetch goals
     goals_df = goal_manager.fetch_goals()
     if goals_df.empty:
         print("No goals found. Cannot calculate life score.")
@@ -307,12 +316,12 @@ def submit_data(state):
 
     try:
         # Fetch calorie expenditure and sleep hours
-        entry_date_str = state.entry_date.strftime("%Y-%m-%d")
+        entry_date_str = state.entry_date.strftime("%Y-%m-%d") if state.entry_date else None
         query = text("SELECT calorie_expenditure, sleep_hours FROM health_metrics WHERE date = :date_param")
         session = db_manager.Session()  # Start a session
         result = session.execute(query, {"date_param": entry_date_str}).fetchone()
 
-        
+        # Handle fetched data
         calorie_expenditure, sleep_hours = result if result else (0, 0.0)
         if calorie_expenditure is None or state.calorie_intake is None:
             calorie_deficit = None
@@ -325,7 +334,7 @@ def submit_data(state):
         # Handle fasting_hours
         fasting_hours = float(state.fasting_hours) if state.fasting_hours is not None else None
 
-       
+        # Calculate life score
         lifescore = goal_manager.calculate_lifescore(
             fasting_hours,
             calorie_deficit,
@@ -346,13 +355,8 @@ def submit_data(state):
             'daily_lifescore': lifescore
         }])
 
-       
         print("New Entry DataFrame:")
         print(new_entry)
-        state.df_entry = new_entry.drop(columns=['sleep_hours', 'calorie_expenditure', 'daily_lifescore'], errors='ignore').reset_index(drop=True)
-
-
-
 
         # Upsert the data
         db_manager.upsert_health_metrics(new_entry, is_manualentry=True)
@@ -360,7 +364,7 @@ def submit_data(state):
         # Commit session
         session.commit()
         print("Data submitted successfully.")
-        
+
     except Exception as e:
         # Rollback session on failure
         session.rollback()
@@ -369,61 +373,69 @@ def submit_data(state):
         # Ensure the session is closed
         session.close()
 
+
 df_fetcheddata = db_manager.fetch_data()
 fasting_display=goal_manager.fetch_fasting_window()
-
+df_goals = goal_manager.fetch_goals()
 
 def refresh_graphs(state):
     state.df_fetcheddata = db_manager.fetch_data()
     state.fasting_display=goal_manager.fetch_fasting_window()
-    
+    state.df_goals=goal_manager.fetch_goals()
     
 
 def save_goals(state):
     print("save_goals called")
     try:
-        print("Start Time:", state.start_time)
-        print("End Time:", state.end_time)
-        print("Sleep Goal:", state.sleep_goal)
-        print("Calorie Deficit Goal:", state.calorie_deficit_goal)
-
-        # Using a safe conversion function for floats and ints that handles None values.
+        
         def safe_float(value):
             try:
                 return float(value)
             except (TypeError, ValueError):
-                return None
+                
+                raise ValueError(f"Invalid input for sleep goal: '{value}' must be a number.")
 
         def safe_int(value):
             try:
                 return int(value)
             except (TypeError, ValueError):
-                return None
-        
+                
+                raise ValueError(f"Invalid input for calorie deficit goal: '{value}' must be a number.")
         
         def safe_string(value):
             try: 
                 return str(value)
             except (TypeError, ValueError):
+                print(f"Conversion Error: Unable to convert '{value}' to string.")
                 return None
+            
+        # Validate that goals are not negative
+        sleep_goal = safe_float(state.sleep_goal)
+        if sleep_goal is not None and sleep_goal < 0:
+            raise ValueError("Sleep goal cannot be negative.")
+        
+        calorie_deficit_goal = safe_int(state.calorie_deficit_goal)
+        if calorie_deficit_goal is not None and calorie_deficit_goal < 0:
+            raise ValueError("Calorie deficit goal cannot be negative.")
 
+        # Create DataFrame with validated and converted values
         goals_data = pd.DataFrame([{
             'start_time': safe_string(state.start_time),
             'end_time': safe_string(state.end_time),
             'fasting_hours': None,
-            'sleep_hours': safe_float(state.sleep_goal),
-            'calorie_deficit': safe_int(state.calorie_deficit_goal)
+            'sleep_hours': sleep_goal,
+            'calorie_deficit': calorie_deficit_goal
         }])
         print("DataFrame:\n", goals_data)
-        
 
+        # Update goals in the database
         goal_manager.update_health_goals(goals_data)
-        state.goals_data = goals_data.drop(columns=['fasting_hours'], errors='ignore').reset_index(drop=True)
 
-
+    except ValueError as ve:
+        print(f"Validation Error: {ve}")
     except Exception as e:
-        
         print(f"An error occurred: {e}")
+
       
 #fetch the goals data for display and no need for the fetched data to display    
 #fasting window here
@@ -432,8 +444,12 @@ page = """
 <|Fasting Window:|text|>
 <|{fasting_display}|>
 
+<center><h2 style="color:#87CEEB;">Personal Goals</h2></center>
+<|{df_goals}|table|width=100%|height=400px|>
+
 <|layout|rows=2|gap=0px|>
 <|
+<center><h2 style="color:#87CEEB;">Data Entry</h2></center>
 <h3>Enter Entry Date</h3>
 <|{entry_date}|date|label=Select a Date|>
 
@@ -450,10 +466,6 @@ page = """
 <|Refresh|button|on_action=refresh_graphs|class_name=button|>
 |>
 
-<|>
-<center><h2 style="color:#87CEEB;">Entries</h2></center>
-<|{df_entry}|table|class_name=table-style|placeholder="No entries available"|>
-|>
 
 <|layout|rows=2|gap=20px|>
 <|
@@ -474,13 +486,11 @@ page = """
 <|Save|button|on_action=save_goals|class_name=button|>
 |>
 
-<|>
-<center><h2 style="color:#87CEEB;">New goals</h2></center>
-<|{goals_data}|table|class_name=table-style|placeholder="No goals set"|>
-|>
+
 
 <|layout|columns=1|gap=10px|>
 <|>
+
 <center><h2 style="color:#87CEEB;">Weight Over Time</h2></center>
 <|{df_fetcheddata}|chart|type=line|x=date|y=weight|color=#4682B4|title="Weight Tracking"|>
 |>
@@ -516,8 +526,6 @@ sleep_goal = 8
 calorie_deficit_goal = 500
 from datetime import date
 entry_date = datetime.today().date()
-df_entry = pd.DataFrame(columns=["date", "weight", "calorie_intake", "fasting_hours", "daily_lifescore"])
-goals_data= pd.DataFrame(columns=["start_time", "end_time", "sleep_hours", "calorie_deficit"])
 gui = Gui(page=page)
 
 if __name__ == "__main__":
@@ -530,12 +538,11 @@ if __name__ == "__main__":
             "entry_date": entry_date,
             "calorie_intake": calorie_intake,
             "fasting_hours": fasting_hours,
-            "df_entry": df_entry,
+            "df_goals": df_goals,
             "start_time": start_time,
             "end_time":end_time,
             "sleep_goal":sleep_goal,
             "calorie_deficit_goal":calorie_deficit_goal,
-            "goals_data": goals_data,
             "fasting_display": fasting_display
             
         }
