@@ -148,7 +148,7 @@ class GoalsManager:
     def update_health_goals(self, df):
         def parse_time(time_str):
             # Parse time, return None if the input is None or an empty string
-            if not time_str:  # Handles None and empty string
+            if time_str is None:  # Handles None and empty string
                 return None
             return datetime.strptime(time_str, "%H:%M").time()
         
@@ -387,19 +387,27 @@ def refresh_graphs(state):
 def save_goals(state):
     print("save_goals called")
     try:
-        
+        # Helper function to convert empty strings to None
+        def empty_to_none(value):
+            return value if value != '' else None
+
+        # Normalize state values
+        state.start_time = empty_to_none(state.start_time)
+        state.end_time = empty_to_none(state.end_time)
+        state.sleep_goal = empty_to_none(state.sleep_goal)
+        state.calorie_deficit_goal = empty_to_none(state.calorie_deficit_goal)
+
+        # Conversion and validation functions
         def safe_float(value):
             try:
                 return float(value)
             except (TypeError, ValueError):
-                
                 raise ValueError(f"Invalid input for sleep goal: '{value}' must be a number.")
 
         def safe_int(value):
             try:
                 return int(value)
             except (TypeError, ValueError):
-                
                 raise ValueError(f"Invalid input for calorie deficit goal: '{value}' must be a number.")
         
         def safe_string(value):
@@ -410,11 +418,11 @@ def save_goals(state):
                 return None
             
         # Validate that goals are not negative
-        sleep_goal = safe_float(state.sleep_goal)
+        sleep_goal = safe_float(state.sleep_goal) if state.sleep_goal is not None else None
         if sleep_goal is not None and sleep_goal < 0:
             raise ValueError("Sleep goal cannot be negative.")
         
-        calorie_deficit_goal = safe_int(state.calorie_deficit_goal)
+        calorie_deficit_goal = safe_int(state.calorie_deficit_goal) if state.calorie_deficit_goal is not None else None
         if calorie_deficit_goal is not None and calorie_deficit_goal < 0:
             raise ValueError("Calorie deficit goal cannot be negative.")
 
@@ -435,6 +443,7 @@ def save_goals(state):
         print(f"Validation Error: {ve}")
     except Exception as e:
         print(f"An error occurred: {e}")
+
 
       
 #fetch the goals data for display and no need for the fetched data to display    
