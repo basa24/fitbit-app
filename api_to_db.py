@@ -1,5 +1,5 @@
 #Runs in the background
-
+"explain why  this runs separately everyday, why separate files and highlight the reusibility of calsses"
 import datetime
 import logging
 import pandas as pd
@@ -39,7 +39,7 @@ class FitBitAPIClient:
         else:
             logging.error(f"Failed to fetch calorie data: {response.text}")
             return None
-        
+    # this wa s only used for the fake data 
     def get_fitbit_df(self, start_date, end_date):
         sleep_data = self.fetch_sleep_data(start_date, end_date)
         calorie_data = self.fetch_calorie_expenditure_data(start_date, end_date)
