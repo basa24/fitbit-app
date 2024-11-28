@@ -1,0 +1,172 @@
+SUBMIT GOALS
+---
+config:
+  layout: fixed
+  theme: base
+---
+flowchart TD
+ subgraph subGraph0["Error Handling"]
+        X["Notify user of validation error or exception"]
+        Y["Rollback transaction if necessary"]
+  end
+    A["Start submit_data"] --> B["Convert empty strings to None"]
+    B --> C["Validate calorie intake"]
+    C -- Invalid --> Z["Raise ValueError: Invalid calorie intake"]
+    C --> D["Validate fasting hours"]
+    D -- Invalid --> Z1["Raise ValueError: Invalid fasting hours"]
+    D --> E["Validate weight"]
+    E -- Invalid --> Z2["Raise ValueError: Invalid weight"]
+    E --> F["Fetch goals from goal_manager"]
+    F -- Goals empty --> Z3["Raise ValueError: No goals found"]
+    F --> G["Fetch calorie expenditure and sleep hours"]
+    G --> H["Calculate calorie deficit"]
+    H --> I["Calculate life score using calculate_lifescore"]
+    I --> J["Create new DataFrame with state and computed values"]
+    J --> K["Upsert data into health_metrics table"]
+    K --> L["Commit transaction"]
+    L --> M["Notify: Data submitted successfully"]
+    M --> N["End"]
+    X --> N
+    Z --> X
+    Z1 --> X
+    Z2 --> X
+    Z3 --> X
+    K -- Exception occurs --> Y
+    L -- Exception occurs --> Y
+    Y --> N
+
+
+LIFESCORE
+flowchart TD
+    A[Start calculate_lifescore] --> B[Check user inputs for None or empty values]
+    B -->|Any value is None or empty| Z[Return None for lifescore]
+    B -->|All values valid| C[Calculate fasting_score]
+    C --> D[Calculate deficit_score]
+    D --> E[Calculate sleep_score]
+    E --> F[Compute arithmetic mean of valid scores]
+    F --> G[Multiply mean by 100]
+    G --> H[Return lifescore]
+    
+    subgraph "Individual Calculations"
+        C1[Input: hours_fasted, fasting_goal]
+        C1 --> C2[Check for fasting_goal == 0 or None]
+        C2 -->|Yes| C4[Return None]
+        C2 -->|No| C3[Calculate fasting_score = hours_fasted / fasting_goal]
+        C3 --> C5[Cap score to 1]
+        C5 --> C[Return fasting_score]
+        
+        D1[Input: calorie_deficit, deficit_goal]
+        D1 --> D2[Check for deficit_goal == 0 or None]
+        D2 -->|Yes| D4[Return None]
+        D2 -->|No| D3[Calculate deficit_score = actual_deficit / deficit_goal]
+        D3 --> D5[Cap score to 1]
+        D5 --> D[Return deficit_score]
+
+        E1[Input: hours_slept, sleep_goal]
+        E1 --> E2[Check for sleep_goal == 0 or None]
+        E2 -->|Yes| E4[Return None]
+        E2 -->|No| E3[Calculate sleep_score = hours_slept / sleep_goal]
+        E3 --> E5[Cap score to 1]
+        E5 --> E[Return sleep_score]
+    end
+
+    subgraph "Mean Calculation"
+        F1[Input: fasting_score, deficit_score, sleep_score]
+        F1 --> F2[Filter out None values]
+        F2 -->|All scores None| F3[Return None]
+        F2 -->|Valid scores| F4[Calculate arithmetic mean]
+        F4 --> F[Return mean]
+    end
+
+
+UPDATE GOALS
+flowchart TD
+    A[Start update_health_goals] --> B[Parse start_time and end_time in DataFrame]
+    B --> C[Extract first row of DataFrame]
+    C --> D[Calculate fasting hours using start_time and end_time]
+    D --> E[Open Database Session]
+
+    E --> F{Does row with id=1 exist?}
+    F -->|Yes| G[Prepare update statement with values]
+    F -->|No| H[Prepare insert statement with values]
+    G --> I[Execute update statement]
+    H --> I
+
+    I --> J[Commit transaction]
+    J --> K[Print success message]
+    K --> L[Close session]
+    L --> M[End]
+
+    I -->|Error occurs| N[Rollback transaction]
+    N --> O[Print error message]
+    O --> L
+
+UPSERT Data
+flowchart TD
+    A[Start upsert_health_metrics] --> B[Open Database Session]
+    B --> C[Convert DataFrame to Dictionary]
+    C --> D[Prepare Insert Statement]
+
+    D --> E{Is Manual Entry?}
+    E -->|Yes| F[Set upsert_fields: weight, calorie_intake, fasting_hours, daily_lifescore]
+    E -->|No| G[Set upsert_fields: calorie_expenditure, sleep_hours]
+
+    F --> H[Prepare upsert statement with conflict on date]
+    G --> H
+
+    H --> I[Execute upsert statement]
+    I --> J[Commit Transaction]
+
+    J --> K[Print Success Message]
+    K --> L[Close Session]
+    L --> M[End]
+
+    I --> |Error Occurs| N[Rollback Transaction]
+    N --> O[Print Error Message]
+    O --> L
+
+SAVE GOALS
+---
+config:
+  layout: elk
+  theme: base
+---
+flowchart TD
+    A["Start save_goals"] --> B["Normalize state values using empty_to_none"]
+    B --> C["Convert sleep goal using safe_float"]
+    C -- Invalid Input --> D1["Raise ValueError: Invalid sleep goal"]
+    C --> D["Validate sleep goal >= 0"]
+    D -- Negative Value --> D2["Raise ValueError: Negative sleep goal"]
+    D --> E["Convert calorie deficit goal using safe_int"]
+    E -- Invalid Input --> D3["Raise ValueError: Invalid calorie deficit goal"]
+    E --> F["Validate calorie deficit goal >= 0"]
+    F -- Negative Value --> D4["Raise ValueError: Negative calorie deficit goal"]
+    F --> G["Create DataFrame with validated values"]
+    G --> H["Update goals in database"]
+    H -- Success --> I["Notify: Goals saved successfully"]
+    H -- Exception Occurs --> D5["Raise Exception: Error during database update"]
+    I --> Z["End"]
+    D1 --> Z
+    D2 --> Z
+    D3 --> Z
+    D4 --> Z
+    D5 --> Z
+
+
+
+APIFETCHCALOR
+---
+config:
+  layout: elk
+  theme: base
+---
+flowchart TD
+    A[Start fetch_calorie_expenditure_data] --> B[Construct API URL]
+    B --> C[Send GET request to API]
+    C --> D{Response status code is 200?}
+    D -->|Yes| E[Return JSON response]
+    D -->|No| F[Log error message with response text]
+    F --> G[Return None]
+    E --> H[End]
+    G --> H
+

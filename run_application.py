@@ -289,7 +289,7 @@ class GoalsManager:
         # Calculate the life score
         life_score = self.arithmetic_mean_of_ratios(fasting_score, sleep_score, deficit_score)*100
 
-        return life_score
+        return round(life_score, 2)
 
              
 db_manager = DatabaseManager()
@@ -390,16 +390,23 @@ def submit_data(state):
 
         # Commit session
         session.commit()
-        print("Data submitted successfully.")
-
+        
+        message="Data submitted successfully."
+        print(message)
+        notify(state, "message", message)
     except ValueError as ve:
         # Handle validation errors
-        print(f"Validation Error: {ve}")
+        message=f"Validation Error: {ve}"
+        print(message)
+        notify(state, "message", message)
     except Exception as e:
         # Handle unexpected exceptions and rollback
         if 'session' in locals():
             session.rollback()
-        print(f"An unexpected error occurred: {e}")
+            
+        message=f"An unexpected error occurred: {e}"
+        print(message)
+        notify(state, "message", message)
     finally:
         # Ensure the session is closed
         if 'session' in locals():
@@ -414,7 +421,9 @@ def refresh_graphs(state):
     state.df_fetcheddata = db_manager.fetch_data()
     state.fasting_display=goal_manager.fetch_fasting_window()
     state.df_goals=goal_manager.fetch_goals()
-    
+    message="Data refreshed"
+    print(message)
+    notify(state, "message", message)
 
 def save_goals(state):
     print("save_goals called")
@@ -470,11 +479,17 @@ def save_goals(state):
 
         # Update goals in the database
         goal_manager.update_health_goals(goals_data)
-
+        message = "Goals saved"
+        print(message)
+        notify(state, "message", message)
     except ValueError as ve:
-        print(f"Validation Error: {ve}")
+        message=f"Validation Error: {ve}"
+        print(message)
+        notify(state, "message", message)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        message=f"An error occurred: {e}"
+        print(message)
+        notify(state, "message", message)
 
 
       
