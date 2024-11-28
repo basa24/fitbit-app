@@ -297,24 +297,51 @@ db_manager.create_table()
 goal_manager = GoalsManager()
 goal_manager.create_table()
 
-
 def submit_data(state):
-    # Normalize state values: Convert empty strings to None
+ 
+    # Helper function to convert empty strings to None
     def empty_to_none(value):
         return value if value != '' else None
 
+    # Normalize state values
     state.calorie_intake = empty_to_none(state.calorie_intake)
     state.fasting_hours = empty_to_none(state.fasting_hours)
     state.weight = empty_to_none(state.weight)
     state.entry_date = empty_to_none(state.entry_date)
 
-    # Fetch goals
-    goals_df = goal_manager.fetch_goals()
-    if goals_df.empty:
-        print("No goals found. Cannot calculate life score.")
-        return
-
     try:
+        # Convert and validate calorie intake
+        if state.calorie_intake is not None:
+            try:
+                state.calorie_intake = int(state.calorie_intake)
+            except ValueError:
+                raise ValueError(f"Invalid input for calorie intake: '{state.calorie_intake}' must be numeric.")
+            if state.calorie_intake < 0:
+                raise ValueError("Calorie intake cannot be negative.")
+
+        # Convert and validate fasting hours
+        if state.fasting_hours is not None:
+            try:
+                state.fasting_hours = float(state.fasting_hours)
+            except ValueError:
+                raise ValueError(f"Invalid input for fasting hours: '{state.fasting_hours}' must be numeric.")
+            if state.fasting_hours < 0:
+                raise ValueError("Fasting hours cannot be negative.")
+
+        # Convert and validate weight
+        if state.weight is not None:
+            try:
+                state.weight = float(state.weight)
+            except ValueError:
+                raise ValueError(f"Invalid input for weight: '{state.weight}' must be numeric.")
+            if state.weight < 0:
+                raise ValueError("Weight cannot be negative.")
+
+        # Fetch goals
+        goals_df = goal_manager.fetch_goals()
+        if goals_df.empty:
+            raise ValueError("No goals found. Cannot calculate life score.")
+
         # Fetch calorie expenditure and sleep hours
         entry_date_str = state.entry_date.strftime("%Y-%m-%d") if state.entry_date else None
         query = text("SELECT calorie_expenditure, sleep_hours FROM health_metrics WHERE date = :date_param")
@@ -323,16 +350,16 @@ def submit_data(state):
 
         # Handle fetched data
         calorie_expenditure, sleep_hours = result if result else (0, 0.0)
-        if calorie_expenditure is None or state.calorie_intake is None:
-            calorie_deficit = None
-        else:
-            calorie_deficit = int(calorie_expenditure) - int(state.calorie_intake)
+        calorie_deficit = (
+            None if calorie_expenditure is None or state.calorie_intake is None
+            else int(calorie_expenditure) - int(state.calorie_intake)
+        )
 
         # Handle sleep_hours
         sleep_hours = float(sleep_hours) if sleep_hours is not None else None
 
         # Handle fasting_hours
-        fasting_hours = float(state.fasting_hours) if state.fasting_hours is not None else None
+        fasting_hours = state.fasting_hours  # Already converted to float earlier
 
         # Calculate life score
         lifescore = goal_manager.calculate_lifescore(
@@ -365,13 +392,18 @@ def submit_data(state):
         session.commit()
         print("Data submitted successfully.")
 
+    except ValueError as ve:
+        # Handle validation errors
+        print(f"Validation Error: {ve}")
     except Exception as e:
-        # Rollback session on failure
-        session.rollback()
-        print(f"An error occurred: {e}")
+        # Handle unexpected exceptions and rollback
+        if 'session' in locals():
+            session.rollback()
+        print(f"An unexpected error occurred: {e}")
     finally:
         # Ensure the session is closed
-        session.close()
+        if 'session' in locals():
+            session.close()
 
 
 df_fetcheddata = db_manager.fetch_data()
